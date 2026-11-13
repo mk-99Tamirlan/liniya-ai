@@ -1,0 +1,12 @@
+{
+  "name": "liniya-ai-workspace",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Minimal AI chat interface built from an editable Figma design, no registration",
+  "scripts": {
+    "start": "node server/server.js",
+    "check": "node --check app.js && node --check server/server.js"
+  },
+  "engines": { "node": ">=20" }
+}

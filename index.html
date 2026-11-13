@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#f6f4ee" />
+  <meta name="description" content="ЛИНИЯ — пространство для ясных мыслей. Удобный ИИ-чат без регистрации." />
+  <title>ЛИНИЯ — место для ясных мыслей</title>
+  <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="./styles.css" />
+  <script type="module" src="./app.js"></script>
+</head>
+<body>
+<div class="app" id="app">
+  <aside class="sidebar" id="sidebar" aria-label="Навигация">
+    <div class="sidebar-brand"><span class="brand-icon" aria-hidden="true">л</span><span class="brand-word">линия</span><button class="icon-btn close-sidebar" id="close-sidebar" aria-label="Закрыть меню">✕</button></div>
+    <div class="sidebar-caption">РАБОЧЕЕ ПРОСТРАНСТВО</div>
+    <button type="button" class="new-chat" id="new-chat"><span class="plus-sign">＋</span> Новый диалог</button>
+    <div class="history-header"><span>ИСТОРИЯ</span><button id="clear-history" class="text-quiet" title="Удалить все диалоги">Очистить</button></div>
+    <div class="history-list" id="history-list" aria-label="История диалогов"></div>
+    <div class="sidebar-footer">
+      <button class="settings-link" id="open-settings"><span aria-hidden="true">ⓘ</span> Помощь и настройки</button>
+      <span>Без регистрации · история в браузере</span>
+    </div>
+  </aside>
+  <div class="scrim" id="scrim" hidden></div>
+  <div class="workspace">
+    <header class="topbar">
+      <div class="topbar-left"><button class="icon-btn menu-toggle" id="open-sidebar" aria-label="Открыть меню">☰</button><span class="mobile-logo">линия</span><span class="current-title" id="current-title">Главная</span></div>
+      <div class="toolbar"><span class="mode-dot" id="mode-dot"></span><select id="mode-select" aria-label="Режим работы"><option value="demo">Демо-режим</option><option value="api">ИИ через сервер</option></select><button class="icon-btn top-new" id="top-new" title="Новый диалог" aria-label="Новый диалог">＋</button><button class="icon-btn more-btn" id="top-settings" title="Настройки" aria-label="Настройки">⋯</button></div>
+    </header>
+    <main class="main-area" id="main-area">
+      <section class="welcome" id="welcome-view" aria-label="Начальный экран">
+        <div class="welcome-inner">
+          <h1>Место для ясных мыслей.</h1>
+          <p class="welcome-lead">Расскажите, что нужно сделать. Остальное разберём по ходу.</p>
+          <div id="welcome-input-mount"></div>
+          <div class="suggestion-heading">ПОПРОБУЙТЕ НАЧАТЬ С ЭТОГО</div>
+          <div class="suggestions">
+            <button type="button" class="suggestion" data-prompt="Объясни сложную тему простыми словами и приведи понятный пример."><span class="suggest-num sage">01</span><span class="suggest-text"><strong>Объяснить тему</strong><small>Разобраться в сложном простыми словами</small></span><span class="suggest-arrow">→</span></button>
+            <button type="button" class="suggestion" data-prompt="Помоги отредактировать текст: сделай его яснее, сохранив смысл и естественный стиль."><span class="suggest-num sand">02</span><span class="suggest-text"><strong>Отредактировать текст</strong><small>Сделать письмо или работу понятнее</small></span><span class="suggest-arrow">→</span></button>
+            <button type="button" class="suggestion" data-prompt="Помоги продумать проект: цель, функции, этапы работы и необходимые технологии."><span class="suggest-num sage">03</span><span class="suggest-text"><strong>Продумать проект</strong><small>Собрать мысли в рабочий план</small></span><span class="suggest-arrow">→</span></button>
+            <button type="button" class="suggestion" data-prompt="Помоги разобраться в коде: объясни, как находить ошибки и проверять исправления."><span class="suggest-num sand">04</span><span class="suggest-text"><strong>Разобраться с кодом</strong><small>Найти ошибку и понять причину</small></span><span class="suggest-arrow">→</span></button>
+          </div>
+          <div class="welcome-note">Важные ответы стоит перепроверять по источникам.</div>
+        </div>
+      </section>
+      <section class="chat-view" id="chat-view" hidden aria-label="Диалог">
+        <div class="messages-scroller" id="messages-scroller"><div class="messages" id="messages"></div></div>
+        <div class="chat-bottom"><div id="chat-input-mount"></div><div class="chat-disclaimer">Ответы могут быть неточными. Проверяйте важную информацию.</div></div>
+      </section>
+    </main>
+  </div>
+</div>
+<template id="composer-template">
+  <form class="composer" autocomplete="off">
+    <textarea name="message" rows="1" placeholder="Напишите вопрос или опишите задачу…" aria-label="Сообщение" maxlength="12000"></textarea>
+    <div class="composer-line"></div>
+    <div class="composer-actions"><div class="composer-left"><label class="attach-btn" title="Прикрепить текстовый файл"><span class="attach-icon">＋</span><span class="attach-label">Прикрепить</span><input class="file-input" type="file" accept=".txt,.md,.json,.csv,.js,.jsx,.ts,.tsx,.html,.css,.py,.php,.sql,.xml,text/*" hidden /></label><span class="capability">Текст · Файлы</span></div><button type="submit" class="send-btn" aria-label="Отправить сообщение" title="Отправить (Enter)">↑</button></div>
+    <div class="attachment-preview" hidden><span class="attachment-name"></span><button type="button" class="attachment-remove" title="Убрать файл" aria-label="Убрать файл">✕</button></div>
+  </form>
+</template>
+<dialog id="settings-dialog" class="settings-dialog">
+  <div class="dialog-header"><div><span class="eyebrow">РАБОЧЕЕ ПРОСТРАНСТВО</span><h2>Настройки и помощь</h2></div><button id="close-settings" class="icon-btn" aria-label="Закрыть">✕</button></div>
+  <p>«ЛИНИЯ» работает без регистрации. Диалоги сохраняются только в этом браузере. Если очистить данные сайта, история исчезнет.</p>
+  <h3>Режим работы</h3>
+  <p><b>Демо-режим</b> показывает возможности интерфейса без настоящей нейросети. <b>ИИ через сервер</b> отправляет запросы на ваш собственный backend, где ключ хранится вне браузера.</p>
+  <label class="setting-label" for="server-url">Адрес сервера (для режима ИИ)</label>
+  <input id="server-url" type="url" placeholder="http://localhost:8787" spellcheck="false" />
+  <p class="small-note">Оставьте пустым при запуске через локальный сервер проекта. Публичный сервер без ограничений опасен: любой посетитель сможет расходовать ваш баланс API.</p>
+  <div class="dialog-actions"><button class="button-secondary" id="export-history">Экспорт истории (.json)</button><button class="button-primary" id="save-settings">Сохранить</button></div>
+</dialog>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+</body>
+</html>
