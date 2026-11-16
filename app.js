@@ -18,7 +18,10 @@ function readChats() {
 }
 let chats = readChats();
 let activeId = null;
-let settings = { mode: 'demo', url: '', ...safeJSON(localStorage.getItem(SETTINGS_KEY), {}) };
+// When hosted together with the backend, AI mode is enabled by default.
+// GitHub Pages remains in demo mode until a backend URL is configured.
+const bundledBackend = location.port === '8787' || location.port === '10000' || location.hostname.endsWith('.onrender.com');
+let settings = { mode: bundledBackend ? 'api' : 'demo', url: '', ...safeJSON(localStorage.getItem(SETTINGS_KEY), {}) };
 settings.mode = settings.mode === 'api' ? 'api' : 'demo';
 let pending = false;
 let pendingRequest = null;
