@@ -1,14 +1,14 @@
-# Render Blueprint for LINIYA. Add the real key in the Render dashboard only.
 services:
   - type: web
-    name: liniya-ai
+    name: liniya-studio
     runtime: node
     plan: free
     buildCommand: npm install --omit=dev
     startCommand: npm start
+    healthCheckPath: /api/health
     envVars:
-      - key: NODE_VERSION
-        value: '22'
+      - key: NODE_ENV
+        value: production
       - key: HOST
         value: 0.0.0.0
       - key: OPENAI_API_KEY
@@ -16,8 +16,6 @@ services:
       - key: OPENAI_MODEL
         value: gpt-4o-mini
       - key: MAX_DAILY_REQUESTS
-        value: '60'
+        value: "50"
       - key: MAX_DAILY_PER_IP
-        value: '20'
-      - key: ALLOWED_ORIGINS
-        value: https://mk-99Tamirlan.github.io,https://aibekmusabek3-del.github.io
+        value: "12"

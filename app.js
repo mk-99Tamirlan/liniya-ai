@@ -1,269 +1,232 @@
-const STORAGE_KEY = 'liniya.chat.v1';
-const SETTINGS_KEY = 'liniya.settings.v1';
-const MAX_CHATS = 60;
-const MAX_MESSAGES_PER_CHAT = 90;
+import { templates } from './templates.js';
+import { buildZip } from './zip.js';
 
-const $ = (selector) => document.querySelector(selector);
-const el = {
-  history: $('#history-list'), welcome: $('#welcome-view'), chat: $('#chat-view'),
-  messages: $('#messages'), scroller: $('#messages-scroller'), title: $('#current-title'),
-  sidebar: $('#sidebar'), scrim: $('#scrim'), dialog: $('#settings-dialog'),
-  mode: $('#mode-select'), serverUrl: $('#server-url'), toast: $('#toast'),
-};
+const $ = (id) => document.getElementById(id);
+const STORAGE = 'liniya-studio-projects-v1';
+const SETTINGS = 'liniya-studio-settings-v1';
+const MAX_PROJECTS = 20;
+let projects = [];
+let currentId = null;
+let apiUrl = '';
+let style = 'auto';
+let device = 'desktop';
+let busy = false;
+let currentTab = 'preview';
+let toastTimeout;
 
-function safeJSON(value, fallback) { try { return JSON.parse(value); } catch { return fallback; } }
-function readChats() {
-  const raw = safeJSON(localStorage.getItem(STORAGE_KEY), []);
-  return Array.isArray(raw) ? raw.filter(x => x && typeof x.id === 'string' && Array.isArray(x.messages)).slice(0, MAX_CHATS) : [];
+function notify(message) {
+  const el = $('toast');
+  el.textContent = message;
+  el.classList.add('show');
+  clearTimeout(toastTimeout);
+  toastTimeout = setTimeout(() => el.classList.remove('show'), 4200);
 }
-let chats = readChats();
-let activeId = null;
-// When hosted together with the backend, AI mode is enabled by default.
-// GitHub Pages remains in demo mode until a backend URL is configured.
-const bundledBackend = location.port === '8787' || location.port === '10000' || location.hostname.endsWith('.onrender.com');
-let settings = { mode: bundledBackend ? 'api' : 'demo', url: '', ...safeJSON(localStorage.getItem(SETTINGS_KEY), {}) };
-settings.mode = settings.mode === 'api' ? 'api' : 'demo';
-let pending = false;
-let pendingRequest = null;
-let toastHandle = null;
-const composers = {};
-
-function persist() {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(chats.slice(0, MAX_CHATS))); }
-  catch { showToast('Хранилище браузера заполнено. Экспортируйте историю.'); }
-}
-function saveSettings() { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); }
-function showToast(text) {
-  el.toast.textContent = text; el.toast.classList.add('visible');
-  clearTimeout(toastHandle);
-  toastHandle = setTimeout(() => el.toast.classList.remove('visible'), 3500);
-}
-function currentChat() { return chats.find(x => x.id === activeId) || null; }
-function chatTitle(prompt) { return prompt.replace(/\s+/g, ' ').trim().slice(0, 43) || 'Новый диалог'; }
-function dateLabel(timestamp) {
-  return new Date(timestamp).toLocaleString('ru-RU', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
-}
-function setActive(id) {
-  if (pendingRequest) { pendingRequest.abort(); pendingRequest = null; pending = false; }
-  activeId = id && chats.some(c => c.id === id) ? id : null;
-  closeSidebar(); render();
-}
-function newChat() { setActive(null); $('#welcome-view textarea')?.focus(); }
-function deleteChat(id) {
-  if (!confirm('Удалить этот диалог?')) return;
-  chats = chats.filter(x => x.id !== id);
-  if (activeId === id) activeId = null;
-  persist(); render(); showToast('Диалог удалён');
-}
-function renameChat(id) {
-  const chat = chats.find(x => x.id === id);
-  if (!chat) return;
-  const title = prompt('Название диалога', chat.title);
-  if (title === null) return;
-  if (title.trim()) chat.title = title.trim().slice(0, 90);
-  persist(); render();
-}
-function renderHistory() {
-  el.history.replaceChildren();
-  if (!chats.length) {
-    const empty = document.createElement('p'); empty.className = 'empty-history';
-    empty.textContent = 'Ваши диалоги будут появляться здесь после первого сообщения.';
-    el.history.append(empty); return;
-  }
-  for (const chat of chats) {
-    const row = document.createElement('div'); row.className = `history-item${chat.id === activeId ? ' selected' : ''}`;
-    const title = document.createElement('button'); title.className = 'history-title';
-    title.textContent = chat.title; title.title = `${chat.title} · двойной щелчок — переименовать`;
-    title.addEventListener('click', () => setActive(chat.id));
-    title.addEventListener('dblclick', () => renameChat(chat.id));
-    const remove = document.createElement('button'); remove.className = 'history-delete'; remove.textContent = '×';
-    remove.title = 'Удалить диалог'; remove.setAttribute('aria-label', `Удалить ${chat.title}`);
-    remove.addEventListener('click', () => deleteChat(chat.id));
-    row.append(title, remove); el.history.append(row);
-  }
-}
-function addText(parent, text, className) {
-  const node = document.createElement('div'); node.className = className; node.textContent = text; parent.append(node); return node;
-}
-function renderMessages() {
-  el.messages.replaceChildren();
-  const chat = currentChat();
-  if (!chat) return;
-  addText(el.messages, dateLabel(chat.createdAt).toUpperCase(), 'message-meta');
-  for (let i = 0; i < chat.messages.length; i++) {
-    const msg = chat.messages[i];
-    const item = document.createElement('article');
-    item.className = `message ${msg.role === 'user' ? 'user' : 'assistant'}${msg.error ? ' error' : ''}`;
-    if (msg.role === 'assistant') {
-      addText(item, 'л', 'assistant-mark');
-      if (msg.heading) addText(item, msg.heading, 'assistant-heading');
-    }
-    addText(item, msg.content, 'message-body');
-    if (msg.role === 'assistant') {
-      const actions = document.createElement('div'); actions.className = 'message-actions';
-      const copy = document.createElement('button'); copy.textContent = '▣  Скопировать';
-      copy.addEventListener('click', async () => {
-        try { await navigator.clipboard.writeText(msg.content); showToast('Ответ скопирован'); }
-        catch { showToast('Не удалось скопировать'); }
-      });
-      actions.append(copy);
-      if (!msg.error && i === chat.messages.length - 1 && !pending) {
-        const retry = document.createElement('button'); retry.textContent = '↻  Повторить ответ';
-        retry.addEventListener('click', retryLast); actions.append(retry);
-      }
-      item.append(actions);
-    }
-    el.messages.append(item);
-  }
-  if (pending) {
-    const item = document.createElement('article'); item.className = 'message assistant';
-    addText(item, 'л', 'assistant-mark'); addText(item, 'Готовлю ответ…', 'message-body typing-dots');
-    el.messages.append(item);
-  }
-}
-function render() {
-  renderHistory();
-  const chat = currentChat();
-  el.welcome.hidden = !!chat;
-  el.chat.hidden = !chat;
-  el.title.textContent = chat ? chat.title : 'Главная';
-  document.title = `${chat ? chat.title + ' — ' : ''}ЛИНИЯ`;
-  if (chat) { renderMessages(); requestAnimationFrame(() => { el.scroller.scrollTop = el.scroller.scrollHeight; }); }
-  el.mode.value = settings.mode;
-  $('#mode-dot').style.background = settings.mode === 'api' ? '#89a884' : '#c59b75';
-  for (const comp of Object.values(composers)) {
-    const send = comp.querySelector('.send-btn');
-    send.disabled = pending;
-  }
-}
-function demoAnswer(message) {
-  const lower = message.toLowerCase();
-  let heading = 'Начнём с того, что известно.';
-  let content = 'Чтобы двигаться без лишних догадок, предлагаю такой порядок:\n\n01  Определить результат. Что должно получиться в конце?\n\n02  Разбить задачу на небольшие действия. Так проще заметить ошибки.\n\n03  Проверить каждый шаг отдельно и записать, что получилось.\n\nЭто демонстрационный ответ. Для настоящей генерации переключитесь в режим «ИИ через сервер» и настройте локальный backend.';
-  if (/код|ошибк|программ|javascript|python|php|react|html|css/i.test(lower)) {
-    heading = 'Разберёмся с кодом последовательно.';
-    content = '01  Воспроизведите ошибку и сохраните её точный текст.\n\n02  Найдите минимальный участок кода, в котором проблема повторяется.\n\n03  Проверьте входные данные, типы и условия выполнения.\n\n04  После исправления запустите проверку ещё раз.\n\nЭто пример ответа в демонстрационном режиме, не результат анализа вашего кода. Для реальной помощи подключите сервер ИИ.';
-  } else if (/текст|письм|редакт|сообщен|пост|сочинен/i.test(lower)) {
-    heading = 'Сделаем текст понятнее.';
-    content = 'При редактировании полезно сохранить основную мысль, убрать повторы и подобрать естественные формулировки.\n\nПроверьте три вещи:\n01  Понятна ли цель текста с первых строк?\n02  Нет ли слишком длинных предложений?\n03  Звучит ли текст так, как вы обычно разговариваете?\n\nЭто демонстрация интерфейса. Редактирование реального текста доступно после подключения ИИ.';
-  } else if (/проект|иде|план|сайт|приложен/i.test(lower)) {
-    heading = 'У идеи должна появиться структура.';
-    content = 'Я бы предложил начать с короткого описания:\n\n01  Для кого проект и какую проблему он решает.\n\n02  Какие три функции должны работать в первой версии.\n\n03  Как пользователь пройдёт путь от начала до результата.\n\n04  Что нужно протестировать перед публикацией.\n\nЭто демонстрационная подсказка, а не индивидуально сгенерированный план. Для реальной генерации нужен backend ИИ.';
-  } else if (/объясн|тем|что такое|почему|как работает/i.test(lower)) {
-    heading = 'Начнём с простого объяснения.';
-    content = 'Хороший способ разобраться в новой теме:\n\n01  Сформулировать понятие одним предложением.\n\n02  Найти бытовой или практический пример.\n\n03  Посмотреть, из каких частей состоит процесс.\n\n04  Проверить понимание на небольшом задании.\n\nСейчас это пример работы интерфейса. Настоящие ответы по вашей теме появятся при подключении ИИ.';
-  }
-  return { heading, content };
-}
-function newMessage(role, content, more = {}) { return { role, content, ...more }; }
-function collectMessages(chat) {
-  return chat.messages.filter(m => !m.error).slice(-24).map(m => ({ role: m.role, content: m.content }));
-}
-async function requestResponse(chat, signal) {
-  const prompt = [...chat.messages].reverse().find(m => m.role === 'user')?.content || '';
-  if (settings.mode === 'demo') { await new Promise(resolve => setTimeout(resolve, 380)); return demoAnswer(prompt); }
-  let base = settings.url.trim().replace(/\/$/, '');
-  const url = base ? `${base}/api/chat` : './api/chat';
-  const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messages: collectMessages(chat) }), signal });
-  let data = null;
-  try { data = await response.json(); } catch {}
-  if (!response.ok) throw new Error(data?.error || `Сервер вернул ошибку ${response.status}`);
-  if (typeof data?.text !== 'string' || !data.text.trim()) throw new Error('Сервер не вернул текст ответа');
-  return { content: data.text };
-}
-async function finishReply(chat) {
-  pending = true; pendingRequest = new AbortController();
-  const signal = pendingRequest.signal;
-  render();
+function id() { return globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`; }
+function current() { return projects.find(p => p.id === currentId) || null; }
+function dateLabel(timestamp) { return new Date(timestamp).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' }); }
+function timeLabel(timestamp) { return new Date(timestamp).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }); }
+function safeFilename(s) { return (s || 'site').toLowerCase().replace(/[^\p{L}\p{N}_-]+/gu, '-').replace(/^-+|-+$/g, '').slice(0, 50) || 'site'; }
+function load() {
   try {
-    const reply = await requestResponse(chat, signal);
-    if (!signal.aborted) { chat.messages.push(newMessage('assistant', reply.content, { heading: reply.heading })); chat.updatedAt = Date.now(); persist(); }
-  } catch (error) {
-    if (!signal.aborted) {
-      chat.messages.push(newMessage('assistant', `Не удалось получить ответ: ${error.message}. Проверьте настройки сервера и попробуйте ещё раз.`, { error: true }));
-      persist();
-    }
-  } finally {
-    if (pendingRequest?.signal === signal) { pending = false; pendingRequest = null; }
-    render();
-  }
+    const parsed = JSON.parse(localStorage.getItem(STORAGE) || '[]');
+    if (Array.isArray(parsed)) projects = parsed.filter(p => p && typeof p.id === 'string' && typeof p.title === 'string' && typeof p.html === 'string' && p.html.length < 160000).slice(0, MAX_PROJECTS).map(p => ({ ...p, history: Array.isArray(p.history) ? p.history.slice(-8) : [], changes: Array.isArray(p.changes) ? p.changes.slice(-20) : [] }));
+  } catch { projects = []; }
+  try { apiUrl = String(JSON.parse(localStorage.getItem(SETTINGS) || '{}').apiUrl || ''); } catch { apiUrl = ''; }
 }
-function retryLast() {
-  const chat = currentChat();
-  if (pending || !chat) return;
-  const last = chat.messages.at(-1);
-  if (last?.role === 'assistant') chat.messages.pop();
-  persist(); void finishReply(chat);
+function persist() {
+  try { localStorage.setItem(STORAGE, JSON.stringify(projects)); return true; }
+  catch { notify('Не удалось сохранить проект: хранилище браузера заполнено. Скачайте ZIP.'); return false; }
 }
-function send(text, attachment = '') {
-  if (pending) return;
-  let message = text.trim();
-  if (attachment) message += `${message ? '\n\n' : ''}Содержимое прикреплённого файла:\n${attachment}`;
-  if (!message) return;
-  if (message.length > 12000) { showToast('Сообщение слишком длинное. Максимум 12 000 символов.'); return; }
-  let chat = currentChat();
-  if (!chat) {
-    chat = { id: crypto.randomUUID(), title: chatTitle(text || 'Файл'), createdAt: Date.now(), updatedAt: Date.now(), messages: [] };
-    chats.unshift(chat); activeId = chat.id;
-  }
-  if (chat.messages.length >= MAX_MESSAGES_PER_CHAT) { showToast('Диалог слишком длинный. Создайте новый.'); return; }
-  chat.messages.push(newMessage('user', message)); chat.updatedAt = Date.now();
-  chats = [chat, ...chats.filter(c => c.id !== chat.id)].slice(0, MAX_CHATS);
+function addProject({ title, html, description = '', prompt = '' }) {
+  const now = Date.now();
+  const project = { id: id(), title: title.slice(0, 70), description, html, createdAt: now, updatedAt: now, history: [], changes: [{ text: prompt || 'Создан сайт из шаблона', at: now }] };
+  projects.unshift(project);
+  if (projects.length > MAX_PROJECTS) projects = projects.slice(0, MAX_PROJECTS);
   persist();
-  for (const comp of Object.values(composers)) resetComposer(comp);
-  closeSidebar(); render(); void finishReply(chat);
+  return project;
 }
-function resetComposer(form) {
-  form.reset(); form.dataset.fileText = '';
-  form.querySelector('.attachment-preview').hidden = true;
-  const area = form.querySelector('textarea'); area.style.height = 'auto';
+function snapshot(p) { p.history = [...(p.history || []), p.html].slice(-8); }
+function change(p, text) { p.changes = [...(p.changes || []), { text: text.slice(0, 300), at: Date.now() }].slice(-20); p.updatedAt = Date.now(); persist(); }
+function renderProjects() {
+  $('project-count').textContent = String(projects.length);
+  const list = $('project-list'); list.replaceChildren();
+  if (!projects.length) { const empty = document.createElement('p'); empty.className = 'empty-list'; empty.textContent = 'Здесь появятся ваши сайты'; list.append(empty); return; }
+  for (const p of projects) {
+    const item = document.createElement('div'); item.className = 'project-item' + (p.id === currentId ? ' active' : '');
+    const icon = document.createElement('span'); icon.className = 'project-icon'; icon.textContent = '▧';
+    const select = document.createElement('button'); select.className = 'project-select'; select.type = 'button';
+    const name = document.createElement('strong'); name.textContent = p.title;
+    const date = document.createElement('small'); date.textContent = dateLabel(p.updatedAt);
+    select.append(name, date); select.addEventListener('click', () => openProject(p.id));
+    const del = document.createElement('button'); del.type = 'button'; del.className = 'project-delete'; del.textContent = '×'; del.title = 'Удалить проект'; del.setAttribute('aria-label', `Удалить ${p.title}`);
+    del.addEventListener('click', () => { if (confirm(`Удалить проект «${p.title}»?`)) { projects = projects.filter(x => x.id !== p.id); if (currentId === p.id) showHome(); persist(); renderProjects(); notify('Проект удалён'); } });
+    item.append(icon, select, del); list.append(item);
+  }
 }
-function buildComposer(mount, name) {
-  const form = $('#composer-template').content.firstElementChild.cloneNode(true);
-  const area = form.querySelector('textarea'); const file = form.querySelector('.file-input');
-  form.addEventListener('submit', (event) => { event.preventDefault(); send(area.value, form.dataset.fileText || ''); });
-  area.addEventListener('keydown', event => { if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) { event.preventDefault(); form.requestSubmit(); } });
-  area.addEventListener('input', () => { area.style.height = 'auto'; area.style.height = Math.min(area.scrollHeight, 160) + 'px'; });
-  file.addEventListener('change', async () => {
-    const f = file.files?.[0]; if (!f) return;
-    if (f.size > 100 * 1024) { showToast('Файл должен быть не больше 100 КБ'); file.value = ''; return; }
-    try {
-      form.dataset.fileText = (await f.text()).slice(0, 8000);
-      form.querySelector('.attachment-name').textContent = f.name;
-      form.querySelector('.attachment-preview').hidden = false;
-      showToast('Текстовый файл прикреплён');
-    } catch { showToast('Не удалось прочитать файл'); }
+function renderChanges() {
+  const p = current(); const container = $('change-log'); container.replaceChildren();
+  if (!p) return;
+  const changes = [...(p.changes || [])].reverse();
+  changes.forEach((c, i) => {
+    const row = document.createElement('div'); row.className = 'change-item';
+    const n = document.createElement('span'); n.className = 'change-number'; n.textContent = String(changes.length - i);
+    const info = document.createElement('div');
+    const text = document.createElement('p'); text.textContent = c.text;
+    const date = document.createElement('time'); date.textContent = timeLabel(c.at);
+    info.append(text, date); row.append(n, info); container.append(row);
   });
-  form.querySelector('.attachment-remove').addEventListener('click', () => { form.dataset.fileText = ''; file.value = ''; form.querySelector('.attachment-preview').hidden = true; });
-  mount.append(form); composers[name] = form; return form;
 }
-function openSidebar() { el.sidebar.classList.add('open'); el.scrim.hidden = false; }
-function closeSidebar() { el.sidebar.classList.remove('open'); el.scrim.hidden = true; }
-function openSettings() { el.serverUrl.value = settings.url; el.dialog.showModal(); closeSidebar(); }
-function exportHistory() {
-  const blob = new Blob([JSON.stringify({ version: 1, exportedAt: new Date().toISOString(), chats }, null, 2)], { type: 'application/json' });
-  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'liniya-history.json'; a.click();
-  setTimeout(() => URL.revokeObjectURL(a.href), 1000); showToast('История экспортирована');
+function renderPreview() {
+  const p = current(); if (!p) return;
+  $('site-preview').srcdoc = p.html;
+  $('code-editor').value = p.html;
+  $('project-status').textContent = 'Изменения сохранены в браузере';
+  $('undo-btn').disabled = !(p.history || []).length;
 }
-
-buildComposer($('#welcome-input-mount'), 'welcome');
-buildComposer($('#chat-input-mount'), 'chat');
-$('#new-chat').addEventListener('click', newChat);
-$('#top-new').addEventListener('click', newChat);
-$('#clear-history').addEventListener('click', () => {
-  if (!chats.length) return;
-  if (!confirm('Удалить всю историю диалогов? Это нельзя отменить.')) return;
-  chats = []; persist(); newChat(); showToast('История удалена');
-});
-$('#open-sidebar').addEventListener('click', openSidebar);
-$('#close-sidebar').addEventListener('click', closeSidebar);
-el.scrim.addEventListener('click', closeSidebar);
-$('#open-settings').addEventListener('click', openSettings);
-$('#top-settings').addEventListener('click', openSettings);
-$('#close-settings').addEventListener('click', () => el.dialog.close());
-$('#save-settings').addEventListener('click', () => { settings.url = el.serverUrl.value.trim().replace(/\/$/, ''); saveSettings(); el.dialog.close(); showToast('Настройки сохранены'); });
-$('#export-history').addEventListener('click', exportHistory);
-el.mode.addEventListener('change', () => { settings.mode = el.mode.value; saveSettings(); render(); showToast(settings.mode === 'demo' ? 'Демо-режим включён' : 'Режим ИИ включён: нужен сервер'); });
-for (const card of document.querySelectorAll('.suggestion')) card.addEventListener('click', () => send(card.dataset.prompt));
-window.addEventListener('keydown', event => { if (event.key === 'Escape') closeSidebar(); if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') { event.preventDefault(); newChat(); } });
-render();
+function openProject(projectId) {
+  const p = projects.find(x => x.id === projectId); if (!p) return;
+  currentId = p.id;
+  $('home-view').hidden = true; $('builder-view').hidden = false;
+  $('top-title').textContent = p.title; $('project-name').value = p.title;
+  $('edit-prompt').value = '';
+  renderProjects(); renderChanges(); renderPreview(); setTab('preview'); closeMenu();
+}
+function showHome() {
+  currentId = null; $('home-view').hidden = false; $('builder-view').hidden = true;
+  $('top-title').textContent = 'Новый проект'; renderProjects(); closeMenu();
+}
+function setTab(tab) {
+  currentTab = tab;
+  $('tab-preview').classList.toggle('active', tab === 'preview');
+  $('tab-code').classList.toggle('active', tab === 'code');
+  $('tab-preview').setAttribute('aria-pressed', String(tab === 'preview'));
+  $('tab-code').setAttribute('aria-pressed', String(tab === 'code'));
+  $('preview-stage').hidden = tab !== 'preview'; $('code-stage').hidden = tab !== 'code';
+}
+function applyCode(silent = false) {
+  const p = current(); if (!p) return;
+  const html = $('code-editor').value;
+  if (html === p.html) { if (!silent) notify('Код уже актуален'); return; }
+  if (!html.trim() || html.length > 150000) { notify('HTML должен содержать код размером до 150 КБ'); return; }
+  snapshot(p); p.html = html; change(p, 'Изменён HTML-код вручную');
+  $('site-preview').srcdoc = html; $('undo-btn').disabled = false;
+  $('project-status').textContent = 'Изменения сохранены в браузере';
+  renderChanges(); renderProjects(); if (!silent) notify('Код применён к предпросмотру');
+}
+function setDevice(value) {
+  device = value;
+  $('preview-frame').className = `preview-frame ${device}`;
+  document.querySelectorAll('[data-device]').forEach(b => b.classList.toggle('active', b.dataset.device === device));
+}
+function setStyle(value) {
+  style = value;
+  document.querySelectorAll('[data-style]').forEach(b => b.classList.toggle('active', b.dataset.style === value));
+}
+function endpoint(path) { return (apiUrl || '') + path; }
+async function checkHealth() {
+  const connection = $('connection'); const label = $('connection-label');
+  connection.classList.remove('online'); label.textContent = 'Проверка ИИ…';
+  try {
+    const response = await fetch(endpoint('/api/health'), { signal: AbortSignal.timeout(6000), cache: 'no-store' });
+    if (!response.ok) throw new Error('offline');
+    const data = await response.json();
+    if (data.aiConfigured) { connection.classList.add('online'); label.textContent = 'ИИ подключён'; }
+    else { label.textContent = 'Нужен API-ключ'; }
+  } catch { label.textContent = 'Шаблоны доступны'; }
+}
+async function requestGeneration(prompt, existingHtml = '') {
+  const response = await fetch(endpoint('/api/generate'), {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ prompt, currentHtml: existingHtml, style }),
+    signal: AbortSignal.timeout(110000),
+  });
+  let result;
+  try { result = await response.json(); } catch { throw new Error('Сервер не вернул корректный ответ'); }
+  if (!response.ok) throw new Error(result.error || `Ошибка сервера (${response.status})`);
+  if (typeof result.html !== 'string' || !result.html.includes('<html')) throw new Error('ИИ не вернул полноценную HTML-страницу');
+  return result;
+}
+function setBusy(value) {
+  busy = value;
+  const homeBtn = document.querySelector('.generate-btn');
+  homeBtn.disabled = value; homeBtn.textContent = value ? '✳ Создаём ваш сайт…' : 'Создать с ИИ ↗';
+  $('edit-generate').disabled = value; $('edit-generate').textContent = value ? '✳ Обновляем сайт…' : '✳  Обновить с ИИ';
+}
+async function generateNew(prompt) {
+  if (busy) return;
+  setBusy(true);
+  try {
+    const result = await requestGeneration(prompt);
+    const p = addProject({ title: result.title || 'Новый сайт', html: result.html, description: result.description || '', prompt: 'Создано с ИИ: ' + prompt });
+    $('home-prompt').value = ''; openProject(p.id); notify('Сайт готов! Теперь его можно редактировать и скачать.');
+  } catch (err) { notify(`Не удалось создать сайт: ${err.message}. Проверьте подключение в настройках.`); }
+  finally { setBusy(false); }
+}
+async function refineProject(prompt) {
+  const p = current(); if (!p || busy) return;
+  if (currentTab === 'code' && $('code-editor').value !== p.html) applyCode(true);
+  setBusy(true);
+  try {
+    const result = await requestGeneration(prompt, p.html);
+    snapshot(p); p.html = result.html; change(p, prompt);
+    renderChanges(); renderProjects(); renderPreview(); setTab('preview');
+    $('edit-prompt').value = ''; notify('Готово! Сайт обновлён.');
+  } catch (err) { notify(`Не удалось обновить сайт: ${err.message}`); }
+  finally { setBusy(false); }
+}
+function downloadBlob(data, filename, type) {
+  const blob = data instanceof Blob ? data : new Blob([data], { type });
+  const url = URL.createObjectURL(blob); const link = document.createElement('a');
+  link.href = url; link.download = filename; document.body.append(link); link.click(); link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 30000);
+}
+function downloadHTML() {
+  const p = current(); if (!p) return;
+  if (currentTab === 'code' && $('code-editor').value !== p.html) applyCode(true);
+  downloadBlob(p.html, `${safeFilename(p.title)}.html`, 'text/html;charset=utf-8'); notify('HTML-файл скачан');
+}
+function downloadZIP() {
+  const p = current(); if (!p) return;
+  if (currentTab === 'code' && $('code-editor').value !== p.html) applyCode(true);
+  const readme = `Сайт «${p.title}»\n\nОткройте index.html в браузере.\n\nЭтот ZIP содержит готовую HTML-страницу со стилями и скриптами внутри файла.\nДля публикации: создайте репозиторий на GitHub, загрузите index.html и включите Settings → Pages → Deploy from a branch → main / (root).\n\nСоздано в ЛИНИЯ Studio.\n`;
+  downloadBlob(buildZip([['index.html', p.html], ['README.txt', readme]]), `${safeFilename(p.title)}-website.zip`, 'application/zip');
+  notify('Готовый сайт скачан в ZIP');
+}
+function closeMenu() { $('sidebar').classList.remove('open'); $('menu-overlay').hidden = true; }
+function openMenu() { $('sidebar').classList.add('open'); $('menu-overlay').hidden = false; }
+function openDialog(name) { const el = $(name); if (!el.open) el.showModal(); }
+function saveSettings() {
+  const input = $('api-url').value.trim().replace(/\/+$/, '');
+  if (input && !/^https:\/\//i.test(input) && !/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(input)) { notify('Для удалённого сервера нужен HTTPS-адрес'); return; }
+  apiUrl = input;
+  localStorage.setItem(SETTINGS, JSON.stringify({ apiUrl }));
+  $('settings-dialog').close(); checkHealth(); notify('Адрес сервера сохранён');
+}
+function init() {
+  load(); renderProjects(); checkHealth();
+  $('new-project').addEventListener('click', showHome);
+  $('home-form').addEventListener('submit', e => { e.preventDefault(); const prompt = $('home-prompt').value.trim(); if (prompt.length >= 5) generateNew(prompt); else notify('Опишите сайт хотя бы несколькими словами'); });
+  document.querySelectorAll('[data-idea]').forEach(b => b.addEventListener('click', () => { $('home-prompt').value = b.dataset.idea; $('home-prompt').focus(); }));
+  document.querySelectorAll('[data-template]').forEach(b => b.addEventListener('click', () => { const template = templates[b.dataset.template]; if (!template) return; const p = addProject(template); openProject(p.id); notify('Шаблон открыт. Теперь можете изменить его или скачать.'); }));
+  $('edit-form').addEventListener('submit', e => { e.preventDefault(); const prompt = $('edit-prompt').value.trim(); if (prompt.length >= 5) refineProject(prompt); else notify('Опишите, что хотите изменить'); });
+  $('edit-prompt').addEventListener('keydown', e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); $('edit-form').requestSubmit(); } });
+  $('project-name').addEventListener('change', e => { const p = current(); if (!p) return; p.title = e.target.value.trim().slice(0, 70) || 'Без названия'; p.updatedAt = Date.now(); e.target.value = p.title; $('top-title').textContent = p.title; persist(); renderProjects(); });
+  $('tab-preview').addEventListener('click', () => { const p = current(); if (p && $('code-editor').value !== p.html) applyCode(true); setTab('preview'); });
+  $('tab-code').addEventListener('click', () => setTab('code'));
+  $('apply-code').addEventListener('click', () => applyCode());
+  $('code-editor').addEventListener('input', () => { $('project-status').textContent = 'В коде есть несохранённые изменения'; });
+  $('code-editor').addEventListener('keydown', e => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); applyCode(); } if (e.key === 'Tab') { e.preventDefault(); const t = e.target; const s = t.selectionStart; t.setRangeText('  ', s, t.selectionEnd, 'end'); } });
+  document.querySelectorAll('[data-device]').forEach(b => b.addEventListener('click', () => setDevice(b.dataset.device)));
+  document.querySelectorAll('[data-style]').forEach(b => b.addEventListener('click', () => setStyle(b.dataset.style)));
+  $('undo-btn').addEventListener('click', () => { const p = current(); if (!p?.history?.length) return; p.html = p.history.pop(); change(p, 'Отменено последнее изменение'); renderPreview(); renderChanges(); notify('Предыдущая версия восстановлена'); });
+  $('download-html').addEventListener('click', downloadHTML); $('download-zip').addEventListener('click', downloadZIP);
+  $('open-menu').addEventListener('click', openMenu); $('close-menu').addEventListener('click', closeMenu); $('menu-overlay').addEventListener('click', closeMenu);
+  $('open-settings').addEventListener('click', () => { $('api-url').value = apiUrl; openDialog('settings-dialog'); closeMenu(); });
+  $('close-settings').addEventListener('click', () => $('settings-dialog').close());
+  $('save-settings').addEventListener('click', saveSettings);
+  $('test-connection').addEventListener('click', async () => { saveSettings(); await checkHealth(); notify($('connection-label').textContent); });
+  $('help-btn').addEventListener('click', () => openDialog('help-dialog'));
+  $('close-help').addEventListener('click', () => $('help-dialog').close());
+  $('help-ok').addEventListener('click', () => $('help-dialog').close());
+}
+init();

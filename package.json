@@ -1,12 +1,13 @@
 {
-  "name": "liniya-ai-workspace",
+  "name": "liniya-ai-website-builder",
+  "version": "2.0.0",
   "private": true,
-  "version": "1.0.0",
   "type": "module",
-  "description": "Minimal AI chat interface built from an editable Figma design, no registration",
+  "description": "ЛИНИЯ Studio — конструктор сайтов с ИИ, предпросмотром, редактором и экспортом",
+  "engines": { "node": ">=20" },
   "scripts": {
     "start": "node server/server.js",
-    "check": "node --check app.js && node --check server/server.js"
-  },
-  "engines": { "node": ">=20" }
+    "check": "node --check app.js && node --check templates.js && node --check zip.js && node --check server/server.js",
+    "test": "node --test tests/*.test.js"
+  }
 }

@@ -1,0 +1,39 @@
+ЛИНИЯ Studio. Как заменить старый сайт на GitHub
+
+1. Распакуйте ZIP. Должна появиться папка LINIYA_Constructor.
+2. Откройте PowerShell в VS Code.
+3. Если старый репозиторий ещё не скачан:
+
+cd "$HOME\Downloads"
+git clone https://github.com/aibekmusabek3-del/liniya-ai.git LINIYA_GitHub
+
+4. Скопируйте новый проект в существующий репозиторий:
+
+Copy-Item "$HOME\Downloads\LINIYA_Constructor\*" "$HOME\Downloads\LINIYA_GitHub\" -Recurse -Force
+Copy-Item "$HOME\Downloads\LINIYA_Constructor\.gitignore" "$HOME\Downloads\LINIYA_GitHub\.gitignore" -Force
+Copy-Item "$HOME\Downloads\LINIYA_Constructor\.env.example" "$HOME\Downloads\LINIYA_GitHub\.env.example" -Force
+
+5. Отправьте изменения:
+
+cd "$HOME\Downloads\LINIYA_GitHub"
+git status
+git add .
+git commit -m "Build AI website constructor"
+git push origin main
+
+6. Запуск локально:
+
+npm start
+
+Откройте http://127.0.0.1:8787
+
+Для настоящей генерации сайтов используйте НОВЫЙ API-ключ:
+
+$env:OPENAI_API_KEY = Read-Host "Новый API-ключ"
+npm start
+
+Никогда не вставляйте ключ в GitHub. Ключ, ранее отправленный в чат, нужно отозвать.
+
+Для работы ИИ в интернете: разместите Node.js backend на Render.
+Для статического интерфейса: GitHub -> Settings -> Pages -> main / (root).
+Подробности в README.md.

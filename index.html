@@ -1,75 +1,79 @@
 <!doctype html>
 <html lang="ru">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="theme-color" content="#f6f4ee" />
-  <meta name="description" content="ЛИНИЯ — пространство для ясных мыслей. Удобный ИИ-чат без регистрации." />
-  <title>ЛИНИЯ — место для ясных мыслей</title>
-  <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="./styles.css" />
-  <script type="module" src="./app.js"></script>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#f6f4ee">
+  <meta name="description" content="ЛИНИЯ Studio — ИИ-конструктор сайтов. Создавайте сайты по описанию, редактируйте код и скачивайте результат.">
+  <title>ЛИНИЯ Studio — конструктор сайтов с ИИ</title>
+  <link rel="icon" href="./favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./styles.css">
+  <script src="./app.js" type="module"></script>
 </head>
 <body>
-<div class="app" id="app">
-  <aside class="sidebar" id="sidebar" aria-label="Навигация">
-    <div class="sidebar-brand"><span class="brand-icon" aria-hidden="true">л</span><span class="brand-word">линия</span><button class="icon-btn close-sidebar" id="close-sidebar" aria-label="Закрыть меню">✕</button></div>
-    <div class="sidebar-caption">РАБОЧЕЕ ПРОСТРАНСТВО</div>
-    <button type="button" class="new-chat" id="new-chat"><span class="plus-sign">＋</span> Новый диалог</button>
-    <div class="history-header"><span>ИСТОРИЯ</span><button id="clear-history" class="text-quiet" title="Удалить все диалоги">Очистить</button></div>
-    <div class="history-list" id="history-list" aria-label="История диалогов"></div>
-    <div class="sidebar-footer">
-      <button class="settings-link" id="open-settings"><span aria-hidden="true">ⓘ</span> Помощь и настройки</button>
-      <span>Без регистрации · история в браузере</span>
+<div class="app-shell">
+  <aside class="sidebar" id="sidebar">
+    <div class="brand"><span class="brand-icon">л</span><div class="brand-names"><strong>линия<span class="brand-studio">/ studio</span></strong><small>ИИ-конструктор сайтов</small></div><button class="icon-btn mobile-close" id="close-menu" aria-label="Закрыть меню">×</button></div>
+    <div class="side-label">РАБОЧЕЕ ПРОСТРАНСТВО</div>
+    <button class="primary-btn new-project-btn" id="new-project"><span class="plus">＋</span> Новый сайт</button>
+    <div class="side-section-title"><span>МОИ ПРОЕКТЫ</span><span class="project-counter" id="project-count">0</span></div>
+    <div class="project-list" id="project-list"><p class="empty-list">Здесь появятся ваши сайты</p></div>
+    <div class="sidebar-bottom">
+      <div class="sidebar-tip"><span class="tip-star">✳</span><span>От идеи до готовой страницы — в одном пространстве.</span></div>
+      <button class="settings-trigger" id="open-settings"><span>⚙</span> Настройки подключения</button>
+      <small>Без регистрации · проекты в браузере</small>
     </div>
   </aside>
-  <div class="scrim" id="scrim" hidden></div>
+  <div class="menu-overlay" id="menu-overlay" hidden></div>
   <div class="workspace">
     <header class="topbar">
-      <div class="topbar-left"><button class="icon-btn menu-toggle" id="open-sidebar" aria-label="Открыть меню">☰</button><span class="mobile-logo">линия</span><span class="current-title" id="current-title">Главная</span></div>
-      <div class="toolbar"><span class="mode-dot" id="mode-dot"></span><select id="mode-select" aria-label="Режим работы"><option value="demo">Демо-режим</option><option value="api">ИИ через сервер</option></select><button class="icon-btn top-new" id="top-new" title="Новый диалог" aria-label="Новый диалог">＋</button><button class="icon-btn more-btn" id="top-settings" title="Настройки" aria-label="Настройки">⋯</button></div>
+      <div class="top-left"><button class="icon-btn mobile-menu" id="open-menu" aria-label="Открыть меню">☰</button><span class="top-breadcrumb">Мастерская <span class="crumb-divider">/</span> <strong id="top-title">Новый проект</strong></span></div>
+      <div class="top-actions"><span class="connection" id="connection"><span class="connection-dot"></span><span id="connection-label">Проверка ИИ…</span></span><button class="top-help" id="help-btn">Как это работает <span>↗</span></button></div>
     </header>
-    <main class="main-area" id="main-area">
-      <section class="welcome" id="welcome-view" aria-label="Начальный экран">
-        <div class="welcome-inner">
-          <h1>Место для ясных мыслей.</h1>
-          <p class="welcome-lead">Расскажите, что нужно сделать. Остальное разберём по ходу.</p>
-          <div id="welcome-input-mount"></div>
-          <div class="suggestion-heading">ПОПРОБУЙТЕ НАЧАТЬ С ЭТОГО</div>
-          <div class="suggestions">
-            <button type="button" class="suggestion" data-prompt="Объясни сложную тему простыми словами и приведи понятный пример."><span class="suggest-num sage">01</span><span class="suggest-text"><strong>Объяснить тему</strong><small>Разобраться в сложном простыми словами</small></span><span class="suggest-arrow">→</span></button>
-            <button type="button" class="suggestion" data-prompt="Помоги отредактировать текст: сделай его яснее, сохранив смысл и естественный стиль."><span class="suggest-num sand">02</span><span class="suggest-text"><strong>Отредактировать текст</strong><small>Сделать письмо или работу понятнее</small></span><span class="suggest-arrow">→</span></button>
-            <button type="button" class="suggestion" data-prompt="Помоги продумать проект: цель, функции, этапы работы и необходимые технологии."><span class="suggest-num sage">03</span><span class="suggest-text"><strong>Продумать проект</strong><small>Собрать мысли в рабочий план</small></span><span class="suggest-arrow">→</span></button>
-            <button type="button" class="suggestion" data-prompt="Помоги разобраться в коде: объясни, как находить ошибки и проверять исправления."><span class="suggest-num sand">04</span><span class="suggest-text"><strong>Разобраться с кодом</strong><small>Найти ошибку и понять причину</small></span><span class="suggest-arrow">→</span></button>
+    <main class="main-content">
+      <section class="home-view" id="home-view">
+        <div class="home-content">
+          <div class="eyebrow"><span class="eyebrow-line"></span> СОЗДАВАЙТЕ СВОЁ</div>
+          <h1>Ваш следующий сайт<br><em>начинается с идеи.</em></h1>
+          <p class="hero-description">Опишите, каким вы видите сайт. ЛИНИЯ соберёт дизайн, структуру и код, а вы сможете изменить каждую деталь.</p>
+          <form class="idea-box" id="home-form">
+            <label for="home-prompt">ОПИШИТЕ БУДУЩИЙ САЙТ</label>
+            <textarea id="home-prompt" rows="3" maxlength="2500" placeholder="Например, современный сайт кофейни с меню, фотографиями, адресом и кнопкой бронирования…" required></textarea>
+            <div class="idea-footer"><span>✦ &nbsp; Достаточно пары предложений</span><button class="primary-btn generate-btn" type="submit">Создать с ИИ <span>↗</span></button></div>
+          </form>
+          <div class="prompt-examples"><span>Попробуйте:</span><button data-idea="Лендинг для студии дизайна интерьера в спокойных бежевых тонах с портфолио и формой заявки">Студия интерьера</button><button data-idea="Сайт портфолио веб-разработчика в минималистичном тёмном стиле с проектами и контактами">Портфолио</button><button data-idea="Сайт небольшого цветочного магазина с каталогом букетов, ценами и контактами">Цветочный магазин</button></div>
+          <div class="templates-heading"><div><div class="eyebrow">ИЛИ НАЧНИТЕ С ГОТОВОГО</div><h2>Шаблоны для вдохновения</h2></div><span>Работают даже без подключения к ИИ</span></div>
+          <div class="templates" id="template-grid">
+            <button class="template-card" data-template="coffee"><div class="template-art art-coffee"><span class="mock-nav">MAISON <span>☰</span></span><span class="mock-center">The art of<br><i>slow mornings.</i></span><span class="mock-button">Открыть меню →</span><span class="art-circle">☕</span></div><div class="template-meta"><span><strong>Кофейня</strong><small>Атмосферный лендинг</small></span><span class="template-arrow">↗</span></div></button>
+            <button class="template-card" data-template="portfolio"><div class="template-art art-portfolio"><span class="mock-nav">folio. <span>2026</span></span><span class="mock-center">Designing<br><i>what's next.</i></span><span class="portfolio-orb"></span><span class="mock-bottom">selected works / 01—04</span></div><div class="template-meta"><span><strong>Портфолио</strong><small>Персональный сайт</small></span><span class="template-arrow">↗</span></div></button>
+            <button class="template-card" data-template="flowers"><div class="template-art art-flowers"><span class="mock-nav">flora. <span>MENU ☰</span></span><span class="mock-center">Flowers for<br><i>every feeling.</i></span><span class="flower-art">✿</span><span class="mock-bottom">fresh flowers, always</span></div><div class="template-meta"><span><strong>Магазин цветов</strong><small>Каталог и контакты</small></span><span class="template-arrow">↗</span></div></button>
           </div>
-          <div class="welcome-note">Важные ответы стоит перепроверять по источникам.</div>
+          <div class="home-footnote">Каждый проект сохраняется локально в вашем браузере. Вы можете скачать готовый сайт в любое время.</div>
         </div>
       </section>
-      <section class="chat-view" id="chat-view" hidden aria-label="Диалог">
-        <div class="messages-scroller" id="messages-scroller"><div class="messages" id="messages"></div></div>
-        <div class="chat-bottom"><div id="chat-input-mount"></div><div class="chat-disclaimer">Ответы могут быть неточными. Проверяйте важную информацию.</div></div>
+      <section class="builder-view" id="builder-view" hidden>
+        <div class="builder-left">
+          <div class="builder-left-head"><div class="eyebrow">ВАШ ПРОЕКТ</div><input class="project-name" id="project-name" aria-label="Название проекта" maxlength="70" spellcheck="false"><p>Опишите изменения, а ИИ обновит ваш сайт.</p></div>
+          <div class="builder-left-scroll">
+            <div class="assistant-card"><span class="assistant-logo">✳</span><div><strong>Что создадим сегодня?</strong><p>Вы можете менять текст, цвета, блоки и структуру. Просто напишите, что хотите получить.</p></div></div>
+            <div class="changes-label">ИСТОРИЯ ИЗМЕНЕНИЙ</div>
+            <div class="change-log" id="change-log"><p class="muted-small">История появится после генерации</p></div>
+            <div class="style-group"><div class="changes-label">СТИЛЬ САЙТА</div><div class="style-pills" id="style-pills"><button data-style="auto" class="active">На выбор ИИ</button><button data-style="minimal">Минимализм</button><button data-style="bold">Яркий</button><button data-style="dark">Тёмный</button></div></div>
+          </div>
+          <form class="edit-form" id="edit-form"><label for="edit-prompt">ЧТО НУЖНО ИЗМЕНИТЬ?</label><textarea id="edit-prompt" rows="4" maxlength="2500" placeholder="Например, сделай первый экран ярче, добавь отзывы и измени заголовок…" required></textarea><div class="edit-form-foot"><span>Enter + Ctrl — создать</span><button type="submit" class="primary-btn" id="edit-generate">✳ &nbsp; Обновить с ИИ</button></div></form>
+        </div>
+        <div class="builder-right">
+          <div class="preview-toolbar"><div class="view-tabs"><button class="active" id="tab-preview" aria-pressed="true">◫ &nbsp; Предпросмотр</button><button id="tab-code" aria-pressed="false">⌘ &nbsp; HTML-код</button></div><div class="preview-actions"><div class="device-tabs" id="device-tabs"><button class="active" data-device="desktop" title="Компьютер" aria-label="Компьютер">▣</button><button data-device="tablet" title="Планшет" aria-label="Планшет">▤</button><button data-device="mobile" title="Телефон" aria-label="Телефон">▯</button></div><button class="icon-btn undo-btn" id="undo-btn" title="Отменить последнюю генерацию" aria-label="Отменить последнюю генерацию">↶</button><button class="secondary-btn" id="download-html">↓ HTML</button><button class="primary-btn export-btn" id="download-zip">↓ Скачать ZIP</button></div></div>
+          <div class="preview-stage" id="preview-stage"><div class="preview-frame desktop" id="preview-frame"><iframe id="site-preview" title="Предпросмотр созданного сайта" sandbox="allow-scripts" referrerpolicy="no-referrer"></iframe></div></div>
+          <div class="code-stage" id="code-stage" hidden><div class="code-header"><div><span class="code-dot"></span> index.html <small>Редактируйте HTML, CSS и JavaScript в одном файле</small></div><button class="secondary-btn" id="apply-code">Применить изменения</button></div><textarea id="code-editor" spellcheck="false" aria-label="HTML-код сайта"></textarea></div>
+          <div class="preview-footer"><span id="project-status">Изменения сохранены в браузере</span><span>ЛИНИЯ Studio · HTML / CSS / JS</span></div>
+        </div>
       </section>
     </main>
   </div>
 </div>
-<template id="composer-template">
-  <form class="composer" autocomplete="off">
-    <textarea name="message" rows="1" placeholder="Напишите вопрос или опишите задачу…" aria-label="Сообщение" maxlength="12000"></textarea>
-    <div class="composer-line"></div>
-    <div class="composer-actions"><div class="composer-left"><label class="attach-btn" title="Прикрепить текстовый файл"><span class="attach-icon">＋</span><span class="attach-label">Прикрепить</span><input class="file-input" type="file" accept=".txt,.md,.json,.csv,.js,.jsx,.ts,.tsx,.html,.css,.py,.php,.sql,.xml,text/*" hidden /></label><span class="capability">Текст · Файлы</span></div><button type="submit" class="send-btn" aria-label="Отправить сообщение" title="Отправить (Enter)">↑</button></div>
-    <div class="attachment-preview" hidden><span class="attachment-name"></span><button type="button" class="attachment-remove" title="Убрать файл" aria-label="Убрать файл">✕</button></div>
-  </form>
-</template>
-<dialog id="settings-dialog" class="settings-dialog">
-  <div class="dialog-header"><div><span class="eyebrow">РАБОЧЕЕ ПРОСТРАНСТВО</span><h2>Настройки и помощь</h2></div><button id="close-settings" class="icon-btn" aria-label="Закрыть">✕</button></div>
-  <p>«ЛИНИЯ» работает без регистрации. Диалоги сохраняются только в этом браузере. Если очистить данные сайта, история исчезнет.</p>
-  <h3>Режим работы</h3>
-  <p><b>Демо-режим</b> показывает возможности интерфейса без настоящей нейросети. <b>ИИ через сервер</b> отправляет запросы на ваш собственный backend, где ключ хранится вне браузера.</p>
-  <label class="setting-label" for="server-url">Адрес сервера (для режима ИИ)</label>
-  <input id="server-url" type="url" placeholder="http://localhost:8787" spellcheck="false" />
-  <p class="small-note">Оставьте пустым при запуске через локальный сервер проекта. Публичный сервер без ограничений опасен: любой посетитель сможет расходовать ваш баланс API.</p>
-  <div class="dialog-actions"><button class="button-secondary" id="export-history">Экспорт истории (.json)</button><button class="button-primary" id="save-settings">Сохранить</button></div>
-</dialog>
+<dialog class="settings-dialog" id="settings-dialog"><div class="dialog-head"><div class="eyebrow">НАСТРОЙКИ</div><h2>Подключение к ИИ</h2><button id="close-settings" class="icon-btn dialog-close" aria-label="Закрыть">×</button></div><p>Сайт работает с шаблонами и без сервера. Для генерации по описанию нужен backend с OpenAI API.</p><label for="api-url">Адрес вашего сервера</label><input id="api-url" type="url" placeholder="https://your-app.onrender.com" spellcheck="false"><p class="dialog-hint">Оставьте поле пустым, если открываете сайт через собственный Node.js сервер. Для GitHub Pages укажите HTTPS-адрес backend на Render.</p><div class="dialog-actions"><button class="secondary-btn" id="test-connection">Проверить</button><button class="primary-btn" id="save-settings">Сохранить</button></div><div class="dialog-note">Никогда не вставляйте API-ключ в браузер или исходный код. Он должен храниться в переменных окружения сервера.</div></dialog>
+<dialog class="help-dialog" id="help-dialog"><div class="dialog-head"><div class="eyebrow">КАК ПОЛЬЗОВАТЬСЯ</div><h2>От идеи до сайта</h2><button id="close-help" class="icon-btn dialog-close" aria-label="Закрыть">×</button></div><ol><li>Опишите сайт или выберите готовый шаблон.</li><li>Посмотрите результат на компьютере, планшете или телефоне.</li><li>Попросите ИИ изменить дизайн или откройте вкладку HTML-код.</li><li>Скачайте HTML или ZIP и разместите полученный сайт на хостинге.</li></ol><p>Без подключения к ИИ доступны шаблоны, редактор, предпросмотр и экспорт. История проектов хранится только в этом браузере.</p><button class="primary-btn help-ok" id="help-ok">Понятно</button></dialog>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 </body>
 </html>
